@@ -20,11 +20,11 @@ Please provide a complete runnable program to reproduce your issue.
 package main
 
 import (
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mssql"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
-	_ "github.com/jinzhu/gorm/dialects/postgres"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/eatigo/gorm"
+	_ "github.com/eatigo/gorm/dialects/mssql"
+	_ "github.com/eatigo/gorm/dialects/mysql"
+	_ "github.com/eatigo/gorm/dialects/postgres"
+	_ "github.com/eatigo/gorm/dialects/sqlite"
 )
 
 var db *gorm.DB

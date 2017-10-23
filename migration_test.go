@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jinzhu/gorm"
+	"github.com/eatigo/gorm"
 )
 
 type User struct {
