@@ -2,6 +2,22 @@ package gorm
 
 import "log"
 
+// CallbackType callback type
+type CallbackType string
+
+const (
+	// CreateCallback create callbacks
+	CreateCallback CallbackType = "create"
+	// QueryCallback query callbacks
+	QueryCallback CallbackType = "query"
+	// UpdateCallback update callbacks
+	UpdateCallback CallbackType = "update"
+	// DeleteCallback delete callbacks
+	DeleteCallback CallbackType = "delete"
+	// RowQueryCallback row query callbacks
+	RowQueryCallback CallbackType = "row_query"
+)
+
 // DefaultCallback default callbacks defined by gorm
 var DefaultCallback = &Callback{}
 

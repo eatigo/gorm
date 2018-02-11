@@ -5,7 +5,6 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"testing"
@@ -18,6 +17,7 @@ import (
 	"github.com/eatigo/gorm/dialects/postgres"
 	_ "github.com/eatigo/gorm/dialects/sqlite"
 	"github.com/jinzhu/now"
+	"github.com/eatigo/gorm/tests"
 )
 
 var (
@@ -28,55 +28,11 @@ var (
 func init() {
 	var err error
 
-	if DB, err = OpenTestConnection(); err != nil {
+	if DB, err = tests.OpenTestConnection(); err != nil {
 		panic(fmt.Sprintf("No error should happen when connecting to test database, but got err=%+v", err))
 	}
 
 	runMigration()
-}
-
-func OpenTestConnection() (db *gorm.DB, err error) {
-	dbDSN := os.Getenv("GORM_DSN")
-	switch os.Getenv("GORM_DIALECT") {
-	case "mysql":
-		fmt.Println("testing mysql...")
-		if dbDSN == "" {
-			dbDSN = "gorm:gorm@tcp(localhost:9910)/gorm?charset=utf8&parseTime=True"
-		}
-		db, err = gorm.Open("mysql", dbDSN)
-	case "postgres":
-		fmt.Println("testing postgres...")
-		if dbDSN == "" {
-			dbDSN = "user=gorm password=gorm DB.name=gorm port=9920 sslmode=disable"
-		}
-		db, err = gorm.Open("postgres", dbDSN)
-	case "mssql":
-		// CREATE LOGIN gorm WITH PASSWORD = 'LoremIpsum86';
-		// CREATE DATABASE gorm;
-		// USE gorm;
-		// CREATE USER gorm FROM LOGIN gorm;
-		// sp_changedbowner 'gorm';
-		fmt.Println("testing mssql...")
-		if dbDSN == "" {
-			dbDSN = "sqlserver://gorm:LoremIpsum86@localhost:9930?database=gorm"
-		}
-		db, err = gorm.Open("mssql", dbDSN)
-	default:
-		fmt.Println("testing sqlite3...")
-		db, err = gorm.Open("sqlite3", filepath.Join(os.TempDir(), "gorm.db"))
-	}
-
-	// db.SetLogger(Logger{log.New(os.Stdout, "\r\n", 0)})
-	// db.SetLogger(log.New(os.Stdout, "\r\n", 0))
-	if debug := os.Getenv("DEBUG"); debug == "true" {
-		db.LogMode(true)
-	} else if debug == "false" {
-		db.LogMode(false)
-	}
-
-	db.DB().SetMaxIdleConns(10)
-
-	return
 }
 
 func TestStringPrimaryKey(t *testing.T) {
@@ -825,7 +781,7 @@ func TestDdlErrors(t *testing.T) {
 	}
 	defer func() {
 		// Reopen DB connection.
-		if DB, err = OpenTestConnection(); err != nil {
+		if DB, err = tests.OpenTestConnection(); err != nil {
 			t.Fatalf("Failed re-opening db connection: %s", err)
 		}
 	}()

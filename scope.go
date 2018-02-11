@@ -57,6 +57,11 @@ func (scope *Scope) NewDB() *DB {
 	return nil
 }
 
+// ParentDB create a new DB without search information, current transaction
+func (scope *Scope) ParentDB() *DB {
+	return scope.db.parent
+}
+
 // SQLDB return *sql.DB
 func (scope *Scope) SQLDB() SQLCommon {
 	return scope.db.db
@@ -870,14 +875,37 @@ func (scope *Scope) inlineCondition(values ...interface{}) *Scope {
 	return scope
 }
 
-func (scope *Scope) callCallbacks(funcs []*func(s *Scope)) *Scope {
-	for _, f := range funcs {
+// CallCallbacks call callbacks
+func (scope *Scope) CallCallbacks(ct CallbackType) *DB {
+	defer func() {
+		if r := recover(); r != nil {
+			scope.Err(errors.New(fmt.Sprint(r)))
+		}
+	}()
+
+	var callbacks []*func(*Scope)
+
+	switch ct {
+	case CreateCallback:
+		callbacks = scope.db.Callback().creates
+	case UpdateCallback:
+		callbacks = scope.db.Callback().updates
+	case DeleteCallback:
+		callbacks = scope.db.Callback().deletes
+	case QueryCallback:
+		callbacks = scope.db.Callback().queries
+	case RowQueryCallback:
+		callbacks = scope.db.Callback().rowQueries
+	}
+
+	for _, f := range callbacks {
 		(*f)(scope)
 		if scope.skipLeft {
 			break
 		}
 	}
-	return scope
+
+	return scope.db
 }
 
 func convertInterfaceToMap(values interface{}, withIgnoredField bool) map[string]interface{} {
@@ -944,7 +972,7 @@ func (scope *Scope) row() *sql.Row {
 
 	result := &RowQueryResult{}
 	scope.InstanceSet("row_query_result", result)
-	scope.callCallbacks(scope.db.parent.callbacks.rowQueries)
+	scope.CallCallbacks(RowQueryCallback)
 
 	return result.Row
 }
@@ -954,7 +982,7 @@ func (scope *Scope) rows() (*sql.Rows, error) {
 
 	result := &RowsQueryResult{}
 	scope.InstanceSet("row_query_result", result)
-	scope.callCallbacks(scope.db.parent.callbacks.rowQueries)
+	scope.CallCallbacks(RowQueryCallback)
 
 	return result.Rows, result.Error
 }

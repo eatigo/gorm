@@ -3,9 +3,9 @@
 The fantastic ORM library for Golang, aims to be developer friendly.
 
 [![Join the chat at https://gitter.im/jinzhu/gorm](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/jinzhu/gorm?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
-[![go report card](https://goreportcard.com/badge/github.com/jinzhu/gorm "go report card")](https://goreportcard.com/report/github.com/jinzhu/gorm)
+[![go report card](https://goreportcard.com/badge/github.com/eatigo/gorm "go report card")](https://goreportcard.com/report/github.com/eatigo/gorm)
 [![wercker status](https://app.wercker.com/status/8596cace912c9947dd9c8542ecc8cb8b/s/master "wercker status")](https://app.wercker.com/project/byKey/8596cace912c9947dd9c8542ecc8cb8b)
-[![GoDoc](https://godoc.org/github.com/jinzhu/gorm?status.svg)](https://godoc.org/github.com/jinzhu/gorm)
+[![GoDoc](https://godoc.org/github.com/eatigo/gorm?status.svg)](https://godoc.org/github.com/eatigo/gorm)
 
 ## Overview
 
