@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	_ "github.com/eatigo/gorm/dialects/sqlite"
 	"github.com/jinzhu/now"
 	"github.com/eatigo/gorm/tests"
+	"path/filepath"
 )
 
 var (
@@ -33,6 +35,66 @@ func init() {
 	}
 
 	runMigration()
+}
+
+func OpenTestConnection() (db *gorm.DB, err error) {
+	dbDSN := os.Getenv("GORM_DSN")
+	switch os.Getenv("GORM_DIALECT") {
+	case "mysql":
+		fmt.Println("testing mysql...")
+		if dbDSN == "" {
+			dbDSN = "gorm:gorm@tcp(localhost:9910)/gorm?charset=utf8&parseTime=True"
+		}
+		db, err = gorm.Open("mysql", dbDSN)
+	case "postgres":
+		fmt.Println("testing postgres...")
+		if dbDSN == "" {
+			dbDSN = "user=gorm password=gorm DB.name=gorm port=9920 sslmode=disable"
+		}
+		db, err = gorm.Open("postgres", dbDSN)
+	case "mssql":
+		// CREATE LOGIN gorm WITH PASSWORD = 'LoremIpsum86';
+		// CREATE DATABASE gorm;
+		// USE gorm;
+		// CREATE USER gorm FROM LOGIN gorm;
+		// sp_changedbowner 'gorm';
+		fmt.Println("testing mssql...")
+		if dbDSN == "" {
+			dbDSN = "sqlserver://gorm:LoremIpsum86@localhost:9930?database=gorm"
+		}
+		db, err = gorm.Open("mssql", dbDSN)
+	default:
+		fmt.Println("testing sqlite3...")
+		db, err = gorm.Open("sqlite3", filepath.Join(os.TempDir(), "gorm.db"))
+	}
+
+	// db.SetLogger(Logger{log.New(os.Stdout, "\r\n", 0)})
+	// db.SetLogger(log.New(os.Stdout, "\r\n", 0))
+	if debug := os.Getenv("DEBUG"); debug == "true" {
+		db.LogMode(true)
+	} else if debug == "false" {
+		db.LogMode(false)
+	}
+
+	db.DB().SetMaxIdleConns(10)
+
+	return
+}
+
+func TestOpen_ReturnsError_WithBadArgs(t *testing.T) {
+	stringRef := "foo"
+	testCases := []interface{}{42, time.Now(), &stringRef}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%v", tc), func(t *testing.T) {
+			_, err := gorm.Open("postgresql", tc)
+			if err == nil {
+				t.Error("Should got error with invalid database source")
+			}
+			if !strings.HasPrefix(err.Error(), "invalid database source:") {
+				t.Errorf("Should got error starting with \"invalid database source:\", but got %q", err.Error())
+			}
+		})
+	}
 }
 
 func TestStringPrimaryKey(t *testing.T) {
@@ -592,7 +654,7 @@ func TestQueryBuilderRawQueryWithSubquery(t *testing.T) {
 	DB.Save(&user)
 	user = User{Name: "subquery_test_user2", Age: 11}
 	DB.Save(&user)
-	user = User{Name: "subquery_test_user2", Age: 12}
+	user = User{Name: "subquery_test_user3", Age: 12}
 	DB.Save(&user)
 
 	var count int
@@ -603,11 +665,28 @@ func TestQueryBuilderRawQueryWithSubquery(t *testing.T) {
 			Group("name").
 			QueryExpr(),
 	).Count(&count).Error
+
 	if err != nil {
 		t.Errorf("Expected to get no errors, but got %v", err)
 	}
 	if count != 2 {
 		t.Errorf("Row count must be 2, instead got %d", count)
+	}
+
+	err = DB.Raw("select count(*) from (?) tmp",
+		DB.Table("users").
+			Select("name").
+			Where("name LIKE ?", "subquery_test%").
+			Not("age <= ?", 10).Not("name in (?)", []string{"subquery_test_user1", "subquery_test_user2"}).
+			Group("name").
+			QueryExpr(),
+	).Count(&count).Error
+
+	if err != nil {
+		t.Errorf("Expected to get no errors, but got %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Row count must be 1, instead got %d", count)
 	}
 }
 

@@ -2,7 +2,6 @@ package gorm_test
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 
 	"github.com/eatigo/gorm"
@@ -88,6 +87,37 @@ func TestUIntPrimaryKey(t *testing.T) {
 	}
 }
 
+func TestCustomizedTypePrimaryKey(t *testing.T) {
+	type ID uint
+	type CustomizedTypePrimaryKey struct {
+		ID   ID
+		Name string
+	}
+
+	DB.AutoMigrate(&CustomizedTypePrimaryKey{})
+
+	p1 := CustomizedTypePrimaryKey{Name: "p1"}
+	p2 := CustomizedTypePrimaryKey{Name: "p2"}
+	p3 := CustomizedTypePrimaryKey{Name: "p3"}
+	DB.Create(&p1)
+	DB.Create(&p2)
+	DB.Create(&p3)
+
+	var p CustomizedTypePrimaryKey
+
+	if err := DB.First(&p, p2.ID).Error; err == nil {
+		t.Errorf("Should return error for invalid query condition")
+	}
+
+	if err := DB.First(&p, "id = ?", p2.ID).Error; err != nil {
+		t.Errorf("No error should happen when querying with customized type for primary key, got err %v", err)
+	}
+
+	if p.Name != "p2" {
+		t.Errorf("Should find correct value when querying with customized type for primary key")
+	}
+}
+
 func TestStringPrimaryKeyForNumericValueStartingWithZero(t *testing.T) {
 	type AddressByZipCode struct {
 		ZipCode string `gorm:"primary_key"`
@@ -100,7 +130,7 @@ func TestStringPrimaryKeyForNumericValueStartingWithZero(t *testing.T) {
 	var address AddressByZipCode
 	DB.First(&address, "00501")
 	if address.ZipCode != "00501" {
-		t.Errorf("Fetch a record from with a string primary key for a numeric value starting with zero should work, but failed")
+		t.Errorf("Fetch a record from with a string primary key for a numeric value starting with zero should work, but failed, zip code is %v", address.ZipCode)
 	}
 }
 
@@ -189,6 +219,36 @@ func TestSearchWithPlainSQL(t *testing.T) {
 
 	if DB.Where("name = ?", "none existing").Find(&[]User{}).RecordNotFound() {
 		t.Errorf("Should not get RecordNotFound error when looking for none existing records")
+	}
+}
+
+func TestSearchWithTwoDimensionalArray(t *testing.T) {
+	var users []User
+	user1 := User{Name: "2DSearchUser1", Age: 1, Birthday: parseTime("2000-1-1")}
+	user2 := User{Name: "2DSearchUser2", Age: 10, Birthday: parseTime("2010-1-1")}
+	user3 := User{Name: "2DSearchUser3", Age: 20, Birthday: parseTime("2020-1-1")}
+	DB.Create(&user1)
+	DB.Create(&user2)
+	DB.Create(&user3)
+
+	if dialect := DB.Dialect().GetName(); dialect == "mysql" || dialect == "postgres" {
+		if err := DB.Where("(name, age) IN (?)", [][]interface{}{{"2DSearchUser1", 1}, {"2DSearchUser2", 10}}).Find(&users).Error; err != nil {
+			t.Errorf("No error should happen when query with 2D array, but got %v", err)
+
+			if len(users) != 2 {
+				t.Errorf("Should find 2 users with 2D array, but got %v", len(users))
+			}
+		}
+	}
+
+	if dialect := DB.Dialect().GetName(); dialect == "mssql" {
+		if err := DB.Joins("JOIN (VALUES ?) AS x (col1, col2) ON x.col1 = name AND x.col2 = age", [][]interface{}{{"2DSearchUser1", 1}, {"2DSearchUser2", 10}}).Find(&users).Error; err != nil {
+			t.Errorf("No error should happen when query with 2D array, but got %v", err)
+
+			if len(users) != 2 {
+				t.Errorf("Should find 2 users with 2D array, but got %v", len(users))
+			}
+		}
 	}
 }
 
@@ -683,7 +743,7 @@ func TestPluckWithSelect(t *testing.T) {
 		combineUserAgeSQL = fmt.Sprintf("concat(%v, %v)", DB.Dialect().Quote("name"), DB.Dialect().Quote("age"))
 	)
 
-	if dialect := os.Getenv("GORM_DIALECT"); dialect == "sqlite" {
+	if dialect := DB.Dialect().GetName(); dialect == "sqlite3" {
 		combineUserAgeSQL = fmt.Sprintf("(%v || %v)", DB.Dialect().Quote("name"), DB.Dialect().Quote("age"))
 	}
 
