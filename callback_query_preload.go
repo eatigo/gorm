@@ -329,7 +329,7 @@ func (scope *Scope) handleManyToManyPreload(field *Field, conditions []interface
 
 		scope.New(elem.Addr().Interface()).
 			InstanceSet("gorm:skip_query_callback", true).
-			callCallbacks(scope.db.parent.callbacks.queries)
+			CallCallbacks(QueryCallback)
 
 		var foreignKeys = make([]interface{}, len(sourceKeys))
 		// generate hashed forkey keys in join table

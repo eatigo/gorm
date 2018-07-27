@@ -42,6 +42,8 @@ type Dialect interface {
 	SelectFromDummyTable() string
 	// LastInsertIdReturningSuffix most dbs support LastInsertId, but postgres needs to use `RETURNING`
 	LastInsertIDReturningSuffix(tableName, columnName string) string
+	// DefaultValueStr
+	DefaultValueStr() string
 
 	// BuildKeyName returns a valid key name (foreign key, index key) for the given table, field and reference
 	BuildKeyName(kind, tableName string, fields ...string) string
@@ -70,6 +72,12 @@ func RegisterDialect(name string, dialect Dialect) {
 	dialectsMap[name] = dialect
 }
 
+// GetDialect gets the dialect for the specified dialect name
+func GetDialect(name string) (dialect Dialect, ok bool) {
+	dialect, ok = dialectsMap[name]
+	return
+}
+
 // ParseFieldStructForDialect get field's sql data type
 var ParseFieldStructForDialect = func(field *StructField, dialect Dialect) (fieldValue reflect.Value, sqlType string, size int, additionalType string) {
 	// Get redirected field type
@@ -92,14 +100,16 @@ var ParseFieldStructForDialect = func(field *StructField, dialect Dialect) (fiel
 	}
 
 	// Get scanner's real value
-	var getScannerValue func(reflect.Value)
-	getScannerValue = func(value reflect.Value) {
-		fieldValue = value
-		if _, isScanner := reflect.New(fieldValue.Type()).Interface().(sql.Scanner); isScanner && fieldValue.Kind() == reflect.Struct {
-			getScannerValue(fieldValue.Field(0))
+	if dataType == "" {
+		var getScannerValue func(reflect.Value)
+		getScannerValue = func(value reflect.Value) {
+			fieldValue = value
+			if _, isScanner := reflect.New(fieldValue.Type()).Interface().(sql.Scanner); isScanner && fieldValue.Kind() == reflect.Struct {
+				getScannerValue(fieldValue.Field(0))
+			}
 		}
+		getScannerValue(fieldValue)
 	}
-	getScannerValue(fieldValue)
 
 	// Default Size
 	if num, ok := field.TagSettings["SIZE"]; ok {

@@ -5,19 +5,21 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/erikstmartin/go-testdb"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/mssql"
-	_ "github.com/jinzhu/gorm/dialects/mysql"
-	"github.com/jinzhu/gorm/dialects/postgres"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/eatigo/gorm"
+	_ "github.com/eatigo/gorm/dialects/mssql"
+	_ "github.com/eatigo/gorm/dialects/mysql"
+	"github.com/eatigo/gorm/dialects/postgres"
+	_ "github.com/eatigo/gorm/dialects/sqlite"
 	"github.com/jinzhu/now"
+	"github.com/eatigo/gorm/tests"
+	"path/filepath"
 )
 
 var (
@@ -28,7 +30,7 @@ var (
 func init() {
 	var err error
 
-	if DB, err = OpenTestConnection(); err != nil {
+	if DB, err = tests.OpenTestConnection(); err != nil {
 		panic(fmt.Sprintf("No error should happen when connecting to test database, but got err=%+v", err))
 	}
 
@@ -77,6 +79,22 @@ func OpenTestConnection() (db *gorm.DB, err error) {
 	db.DB().SetMaxIdleConns(10)
 
 	return
+}
+
+func TestOpen_ReturnsError_WithBadArgs(t *testing.T) {
+	stringRef := "foo"
+	testCases := []interface{}{42, time.Now(), &stringRef}
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%v", tc), func(t *testing.T) {
+			_, err := gorm.Open("postgresql", tc)
+			if err == nil {
+				t.Error("Should got error with invalid database source")
+			}
+			if !strings.HasPrefix(err.Error(), "invalid database source:") {
+				t.Errorf("Should got error starting with \"invalid database source:\", but got %q", err.Error())
+			}
+		})
+	}
 }
 
 func TestStringPrimaryKey(t *testing.T) {
@@ -636,7 +654,7 @@ func TestQueryBuilderRawQueryWithSubquery(t *testing.T) {
 	DB.Save(&user)
 	user = User{Name: "subquery_test_user2", Age: 11}
 	DB.Save(&user)
-	user = User{Name: "subquery_test_user2", Age: 12}
+	user = User{Name: "subquery_test_user3", Age: 12}
 	DB.Save(&user)
 
 	var count int
@@ -647,11 +665,28 @@ func TestQueryBuilderRawQueryWithSubquery(t *testing.T) {
 			Group("name").
 			QueryExpr(),
 	).Count(&count).Error
+
 	if err != nil {
 		t.Errorf("Expected to get no errors, but got %v", err)
 	}
 	if count != 2 {
 		t.Errorf("Row count must be 2, instead got %d", count)
+	}
+
+	err = DB.Raw("select count(*) from (?) tmp",
+		DB.Table("users").
+			Select("name").
+			Where("name LIKE ?", "subquery_test%").
+			Not("age <= ?", 10).Not("name in (?)", []string{"subquery_test_user1", "subquery_test_user2"}).
+			Group("name").
+			QueryExpr(),
+	).Count(&count).Error
+
+	if err != nil {
+		t.Errorf("Expected to get no errors, but got %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Row count must be 1, instead got %d", count)
 	}
 }
 
@@ -825,7 +860,7 @@ func TestDdlErrors(t *testing.T) {
 	}
 	defer func() {
 		// Reopen DB connection.
-		if DB, err = OpenTestConnection(); err != nil {
+		if DB, err = tests.OpenTestConnection(); err != nil {
 			t.Fatalf("Failed re-opening db connection: %s", err)
 		}
 	}()

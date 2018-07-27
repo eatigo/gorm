@@ -1,12 +1,11 @@
 package gorm_test
 
 import (
+	"github.com/eatigo/gorm"
 	"encoding/hex"
 	"math/rand"
 	"strings"
 	"testing"
-
-	"github.com/jinzhu/gorm"
 )
 
 func NameIn1And2(d *gorm.DB) *gorm.DB {
