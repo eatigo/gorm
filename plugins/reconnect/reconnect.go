@@ -93,10 +93,12 @@ func (reconnect *Reconnect) generateCallback(callbackType gorm.CallbackType) fun
 				reconnect.mutex.Unlock()
 
 				if connected {
-					value := scope.ParentDB().New()
+					value := scope.NewDB()
+					value.Error = nil
 					value.Value = scope.Value
 					*scope.DB() = *value
 					scope.CallCallbacks(callbackType)
+					scope.SkipLeft()
 				}
 			}
 		}

@@ -1022,17 +1022,39 @@ func (scope *Scope) pluck(column string, value interface{}) *Scope {
 	return scope
 }
 
+func setNumericValue(to interface{}, from int64) error {
+	toVal := reflect.Indirect(reflect.ValueOf(to))
+	switch toVal.Kind() {
+	case reflect.Int8:
+		toVal.Set(reflect.ValueOf(int8(from)))
+	case reflect.Int:
+		toVal.Set(reflect.ValueOf(int(from)))
+	case reflect.Int16:
+		toVal.Set(reflect.ValueOf(int16(from)))
+	case reflect.Int32:
+		toVal.Set(reflect.ValueOf(int32(from)))
+	case reflect.Int64:
+		toVal.Set(reflect.ValueOf(int64(from)))
+	default:
+		return errors.New("gorm: data type is not supported")
+	}
+
+	return nil
+}
+
 func (scope *Scope) count(value interface{}) *Scope {
 	if query, ok := scope.Search.selects["query"]; !ok || !countingQueryRegexp.MatchString(fmt.Sprint(query)) {
 		if len(scope.Search.group) != 0 {
 			scope.Search.Select("count(*) FROM ( SELECT count(*) as name ")
 			scope.Search.group += " ) AS count_table"
 		} else {
-			scope.Search.Select("count(*)")
+			scope.Search.Select("count(1)")
 		}
 	}
 	scope.Search.ignoreOrderQuery = true
-	scope.Err(scope.row().Scan(value))
+	scope.Set("gorm:row_query_destination", value)
+	scope.CallCallbacks(RowQueryCallback)
+
 	return scope
 }
 
