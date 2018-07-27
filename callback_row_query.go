@@ -18,6 +18,14 @@ type RowsQueryResult struct {
 
 // queryCallback used to query data from database
 func rowQueryCallback(scope *Scope) {
+	value, ok := scope.Get("gorm:row_query_destination")
+	if ok {
+		scope.prepareQuerySQL()
+		r := scope.SQLDB().QueryRow(scope.SQL, scope.SQLVars...)
+		scope.Err(r.Scan(value))
+		return
+	}
+
 	if result, ok := scope.InstanceGet("row_query_result"); ok {
 		scope.prepareQuerySQL()
 
@@ -26,5 +34,6 @@ func rowQueryCallback(scope *Scope) {
 		} else if rowsResult, ok := result.(*RowsQueryResult); ok {
 			rowsResult.Rows, rowsResult.Error = scope.SQLDB().Query(scope.SQL, scope.SQLVars...)
 		}
+
 	}
 }

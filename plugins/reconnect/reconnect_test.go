@@ -13,7 +13,8 @@ import (
 func TestReconnect(t *testing.T) {
 	DB, err := tests.OpenTestConnection()
 	DB.DB().SetConnMaxLifetime(24 * time.Hour)
-	DB.Use(reconnect.New(nil))
+	r, _ := reconnect.New(reconnect.Config{DSN: "test"})
+	DB.Use(r)
 
 	if err != nil {
 		t.Error(err)

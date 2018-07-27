@@ -130,7 +130,14 @@ func (s mssql) RemoveIndex(tableName string, indexName string) error {
 }
 
 func (s mssql) HasForeignKey(tableName string, foreignKeyName string) bool {
-	return false
+	var count int
+	currentDatabase, tableName := currentDatabaseAndTable(&s, tableName)
+	s.db.QueryRow(`SELECT count(*) 
+	FROM sys.foreign_keys as F inner join sys.tables as T on F.parent_object_id=T.object_id 
+		inner join information_schema.tables as I on I.TABLE_NAME = T.name 
+	WHERE F.name = ? 
+		AND T.Name = ? AND I.TABLE_CATALOG = ?;`, foreignKeyName, tableName, currentDatabase).Scan(&count)
+	return count > 0
 }
 
 func (s mssql) HasTable(tableName string) bool {
@@ -181,6 +188,10 @@ func (mssql) SelectFromDummyTable() string {
 
 func (mssql) LastInsertIDReturningSuffix(tableName, columnName string) string {
 	return ""
+}
+
+func (mssql) DefaultValueStr() string {
+	return "DEFAULT VALUES"
 }
 
 func currentDatabaseAndTable(dialect gorm.Dialect, tableName string) (string, string) {

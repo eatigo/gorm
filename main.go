@@ -61,6 +61,8 @@ func Open(dialect string, args ...interface{}) (db *DB, err error) {
 		dbSQL, err = sql.Open(driver, source)
 	case SQLCommon:
 		dbSQL = value
+	default:
+		return nil, fmt.Errorf("invalid database source: %v is not a valid type", value)
 	}
 
 	db = &DB{
@@ -177,6 +179,15 @@ func (s *DB) QueryExpr() *expr {
 	return Expr(scope.SQL, scope.SQLVars...)
 }
 
+// SubQuery returns the query as sub query
+func (s *DB) SubQuery() *expr {
+	scope := s.NewScope(s.Value)
+	scope.InstanceSet("skip_bindvar", true)
+	scope.prepareQuerySQL()
+
+	return Expr(fmt.Sprintf("(%v)", scope.SQL), scope.SQLVars...)
+}
+
 // Where return a new relation, filter records with given conditions, accepts `map`, `struct` or `string` as conditions, refer http://jinzhu.github.io/gorm/crud.html#query
 func (s *DB) Where(query interface{}, args ...interface{}) *DB {
 	return s.clone().search.Where(query, args...).db
@@ -278,6 +289,13 @@ func (s *DB) First(out interface{}, where ...interface{}) *DB {
 	newScope.Search.Limit(1)
 	return newScope.Set("gorm:order_by_primary_key", "ASC").
 		inlineCondition(where...).CallCallbacks(QueryCallback)
+}
+
+// Take return a record that match given conditions, the order will depend on the database implementation
+func (s *DB) Take(out interface{}, where ...interface{}) *DB {
+	newScope := s.NewScope(out)
+	newScope.Search.Limit(1)
+	return newScope.inlineCondition(where...).CallCallbacks(QueryCallback)
 }
 
 // Last find last record that match given conditions, order by primary key
@@ -430,7 +448,7 @@ func (s *DB) Raw(sql string, values ...interface{}) *DB {
 // Exec execute raw sql
 func (s *DB) Exec(sql string, values ...interface{}) *DB {
 	scope := s.NewScope(nil)
-	generatedSQL := scope.buildWhereCondition(map[string]interface{}{"query": sql, "args": values})
+	generatedSQL := scope.buildCondition(map[string]interface{}{"query": sql, "args": values}, true)
 	generatedSQL = strings.TrimSuffix(strings.TrimPrefix(generatedSQL, "("), ")")
 	scope.Raw(generatedSQL)
 	return scope.Exec().db
@@ -475,7 +493,8 @@ func (s *DB) Begin() *DB {
 
 // Commit commit a transaction
 func (s *DB) Commit() *DB {
-	if db, ok := s.db.(sqlTx); ok && db != nil {
+	var emptySQLTx *sql.Tx
+	if db, ok := s.db.(sqlTx); ok && db != nil && db != emptySQLTx {
 		s.AddError(db.Commit())
 	} else {
 		s.AddError(ErrInvalidTransaction)
@@ -485,7 +504,8 @@ func (s *DB) Commit() *DB {
 
 // Rollback rollback a transaction
 func (s *DB) Rollback() *DB {
-	if db, ok := s.db.(sqlTx); ok && db != nil {
+	var emptySQLTx *sql.Tx
+	if db, ok := s.db.(sqlTx); ok && db != nil && db != emptySQLTx {
 		s.AddError(db.Rollback())
 	} else {
 		s.AddError(ErrInvalidTransaction)

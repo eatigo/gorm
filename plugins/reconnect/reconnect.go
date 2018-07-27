@@ -2,7 +2,7 @@ package reconnect
 
 import (
 	"database/sql/driver"
-	"reflect"
+	"errors"
 	"regexp"
 	"sync"
 	"time"
@@ -14,7 +14,7 @@ var _ gorm.PluginInterface = &Reconnect{}
 
 // Reconnect GORM reconnect plugin
 type Reconnect struct {
-	Config *Config
+	Config Config
 	mutex  sync.Mutex
 }
 
@@ -23,12 +23,13 @@ type Config struct {
 	Attempts       int
 	Interval       time.Duration
 	BadConnChecker func(errors []error) bool
+	DSN            string
 }
 
 // New initialize GORM reconnect DB
-func New(config *Config) *Reconnect {
-	if config == nil {
-		config = &Config{}
+func New(config Config) (*Reconnect, error) {
+	if config.DSN == "" {
+		return nil, errors.New("DSN must not be empty")
 	}
 
 	if config.BadConnChecker == nil {
@@ -54,7 +55,7 @@ func New(config *Config) *Reconnect {
 	return &Reconnect{
 		mutex:  sync.Mutex{},
 		Config: config,
-	}
+	}, nil
 }
 
 // Apply apply reconnect to GORM DB instance
@@ -92,10 +93,12 @@ func (reconnect *Reconnect) generateCallback(callbackType gorm.CallbackType) fun
 				reconnect.mutex.Unlock()
 
 				if connected {
-					value := scope.ParentDB().New()
+					value := scope.NewDB()
+					value.Error = nil
 					value.Value = scope.Value
 					*scope.DB() = *value
 					scope.CallCallbacks(callbackType)
+					scope.SkipLeft()
 				}
 			}
 		}
@@ -106,8 +109,7 @@ func (reconnect *Reconnect) reconnectDB(scope *gorm.Scope) error {
 	var (
 		db         = scope.ParentDB()
 		sqlDB      = db.DB()
-		dsn        = reflect.Indirect(reflect.ValueOf(sqlDB)).FieldByName("dsn").String()
-		newDB, err = gorm.Open(db.Dialect().GetName(), dsn)
+		newDB, err = gorm.Open(db.Dialect().GetName(), reconnect.Config.DSN)
 	)
 
 	err = newDB.DB().Ping()
