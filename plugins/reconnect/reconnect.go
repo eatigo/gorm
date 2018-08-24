@@ -97,6 +97,7 @@ func (reconnect *Reconnect) generateCallback(callbackType gorm.CallbackType) fun
 					value.Error = nil
 					value.Value = scope.Value
 					*scope.DB() = *value
+					scope.SQLVars = nil
 					scope.CallCallbacks(callbackType)
 					scope.SkipLeft()
 				}
