@@ -56,6 +56,11 @@ func (scope *Scope) NewDB() *DB {
 	return nil
 }
 
+// ParentDB create a new DB without search information, current transaction
+func (scope *Scope) ParentDB() *DB {
+	return scope.db.parent
+}
+
 // SQLDB return *sql.DB
 func (scope *Scope) SQLDB() SQLCommon {
 	return scope.db.db

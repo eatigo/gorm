@@ -5,6 +5,12 @@ import "fmt"
 // DefaultCallback default callbacks defined by gorm
 var DefaultCallback = &Callback{logger: nopLogger{}}
 
+// CallbackType callback type
+type CallbackType string
+
+
+
+
 // Callback is a struct that contains all CRUD callbacks
 //   Field `creates` contains callbacks will be call when creating object
 //   Field `updates` contains callbacks will be call when updating object
