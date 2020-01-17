@@ -12,6 +12,20 @@ import (
 
 var _ gorm.PluginInterface = &Reconnect{}
 
+const (
+	// CreateCallback create callbacks
+	CreateCallback  = "create"
+	// QueryCallback query callbacks
+	QueryCallback  = "query"
+	// UpdateCallback update callbacks
+	UpdateCallback  = "update"
+	// DeleteCallback delete callbacks
+	DeleteCallback  = "delete"
+	// RowQueryCallback row query callbacks
+	RowQueryCallback  = "row_query"
+)
+
+
 // Reconnect GORM reconnect plugin
 type Reconnect struct {
 	Config Config
@@ -60,19 +74,26 @@ func New(config Config) (*Reconnect, error) {
 
 // Apply apply reconnect to GORM DB instance
 func (reconnect *Reconnect) Apply(db *gorm.DB) {
+	afterFunc := func(operationName string) func(*gorm.Scope) {
+		return func(scope *gorm.Scope) {
+			reconnect.generateCallback(scope, operationName)
+		}
+	}
 	db.Callback().Create().After("gorm:commit_or_rollback_transaction").
-		Register("gorm:plugins:reconnect", reconnect.generateCallback(gorm.CreateCallback))
+		Register("gorm:plugins:reconnect", afterFunc(CreateCallback))
 	db.Callback().Update().After("gorm:commit_or_rollback_transaction").
-		Register("gorm:plugins:reconnect", reconnect.generateCallback(gorm.UpdateCallback))
+		Register("gorm:plugins:reconnect",afterFunc(UpdateCallback))
 	db.Callback().Delete().After("gorm:commit_or_rollback_transaction").
-		Register("gorm:plugins:reconnect", reconnect.generateCallback(gorm.DeleteCallback))
+		Register("gorm:plugins:reconnect", afterFunc(DeleteCallback))
 	db.Callback().Query().After("gorm:query").
-		Register("gorm:plugins:reconnect", reconnect.generateCallback(gorm.QueryCallback))
+		Register("gorm:plugins:reconnect", afterFunc(QueryCallback))
 	db.Callback().RowQuery().After("gorm:row_query").
-		Register("gorm:plugins:reconnect", reconnect.generateCallback(gorm.RowQueryCallback))
+		Register("gorm:plugins:reconnect", afterFunc(RowQueryCallback))
 }
 
-func (reconnect *Reconnect) generateCallback(callbackType gorm.CallbackType) func(*gorm.Scope) {
+
+func (reconnect *Reconnect) generateCallback(scope *gorm.Scope,callbackType string) func(*gorm.Scope) {
+
 	return func(scope *gorm.Scope) {
 		if scope.HasError() {
 			if db := scope.DB(); reconnect.Config.BadConnChecker(db.GetErrors()) {
@@ -98,7 +119,7 @@ func (reconnect *Reconnect) generateCallback(callbackType gorm.CallbackType) fun
 					value.Value = scope.Value
 					*scope.DB() = *value
 					scope.SQLVars = nil
-					scope.CallCallbacks(callbackType)
+					scope.CallMethod(callbackType)
 					scope.SkipLeft()
 				}
 			}
