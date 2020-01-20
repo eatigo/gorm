@@ -3,6 +3,7 @@ package reconnect
 import (
 	"database/sql/driver"
 	"errors"
+	"github.com/eatigo/gorm/plugins"
 	"regexp"
 	"sync"
 	"time"
@@ -11,19 +12,6 @@ import (
 )
 
 var _ gorm.PluginInterface = &Reconnect{}
-
-const (
-	// CreateCallback create callbacks
-	CreateCallback  = "create"
-	// QueryCallback query callbacks
-	QueryCallback  = "query"
-	// UpdateCallback update callbacks
-	UpdateCallback  = "update"
-	// DeleteCallback delete callbacks
-	DeleteCallback  = "delete"
-	// RowQueryCallback row query callbacks
-	RowQueryCallback  = "row_query"
-)
 
 
 // Reconnect GORM reconnect plugin
@@ -74,21 +62,22 @@ func New(config Config) (*Reconnect, error) {
 
 // Apply apply reconnect to GORM DB instance
 func (reconnect *Reconnect) Apply(db *gorm.DB) {
+
 	afterFunc := func(operationName string) func(*gorm.Scope) {
 		return func(scope *gorm.Scope) {
 			reconnect.generateCallback(scope, operationName)
 		}
 	}
 	db.Callback().Create().After("gorm:commit_or_rollback_transaction").
-		Register("gorm:plugins:reconnect", afterFunc(CreateCallback))
+		Register("gorm:plugins:reconnect", afterFunc(plugins.CreateCallback))
 	db.Callback().Update().After("gorm:commit_or_rollback_transaction").
-		Register("gorm:plugins:reconnect",afterFunc(UpdateCallback))
+		Register("gorm:plugins:reconnect",afterFunc(plugins.UpdateCallback))
 	db.Callback().Delete().After("gorm:commit_or_rollback_transaction").
-		Register("gorm:plugins:reconnect", afterFunc(DeleteCallback))
+		Register("gorm:plugins:reconnect", afterFunc(plugins.DeleteCallback))
 	db.Callback().Query().After("gorm:query").
-		Register("gorm:plugins:reconnect", afterFunc(QueryCallback))
+		Register("gorm:plugins:reconnect", afterFunc(plugins.QueryCallback))
 	db.Callback().RowQuery().After("gorm:row_query").
-		Register("gorm:plugins:reconnect", afterFunc(RowQueryCallback))
+		Register("gorm:plugins:reconnect", afterFunc(plugins.RowQueryCallback))
 }
 
 
