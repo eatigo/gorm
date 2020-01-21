@@ -68,18 +68,22 @@ func (ddtrace *DDtrace) Apply(db *gorm.DB) {
 	for _, fn := range ddtrace.Options {
 		fn(cfg)
 	}
-	db.Set(gormConfigKey, cfg)
+	db =db.Set(gormConfigKey, *cfg)
 }
 
 // WithContext attaches the specified context to the given db. The context will
 // be used as a basis for creating new spans. An example use case is providing
 // a context which contains a span to be used as a parent.
-func WithContext(ctx context.Context, db *gorm.DB) *gorm.DB {
-	if ctx == nil {
-		return db
+func (ddtrace *DDtrace) WithContext(ctx context.Context, db *gorm.DB) error {
+	if db == nil {
+		return errors.New("gorm is nil")
 	}
-	db = db.Set(gormContextKey, ctx)
-	return db
+	if ctx ==nil{
+		ctx =context.Background()
+	}
+	db.Set(gormContextKey, ctx)
+
+	return nil
 }
 
 func before(scope *gorm.Scope) {
