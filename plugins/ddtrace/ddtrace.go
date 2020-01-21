@@ -68,7 +68,8 @@ func (ddtrace *DDtrace) Apply(db *gorm.DB) {
 	for _, fn := range ddtrace.Options {
 		fn(cfg)
 	}
-	db =db.Set(gormConfigKey, *cfg)
+	dbnew := db.Set(gormConfigKey, cfg)
+	db = dbnew
 }
 
 // WithContext attaches the specified context to the given db. The context will
