@@ -27,7 +27,6 @@ type DDtrace struct {
 
 const (
 	gormContextKey       = "dd-trace-go:context"
-	gormConfigKey        = "dd-trace-go:config"
 	gormSpanStartTimeKey = "dd-trace-go:span"
 )
 
@@ -45,32 +44,30 @@ func New(opts ...Option) (*DDtrace, error) {
 // Apply apply reconnect to GORM DB instance
 func (ddtrace *DDtrace) Apply(db *gorm.DB) {
 
-	afterFunc := func(operationName string) func(*gorm.Scope) {
+	afterFunc := func(operationName string,analyticsRate float64, serviceName string) func(*gorm.Scope) {
 		return func(scope *gorm.Scope) {
-			after(scope, operationName)
+			after(scope, operationName,analyticsRate,serviceName)
 		}
 	}
-
-	cb := db.Callback()
-	cb.Create().Before("gorm:before_create").Register("dd-trace-go:before_create", before)
-	cb.Create().After("gorm:after_create").Register("dd-trace-go:after_create", afterFunc(plugins.CreateCallback))
-	cb.Update().Before("gorm:before_update").Register("dd-trace-go:before_update", before)
-	cb.Update().After("gorm:after_update").Register("dd-trace-go:after_update", afterFunc(plugins.UpdateCallback))
-	cb.Delete().Before("gorm:before_delete").Register("dd-trace-go:before_delete", before)
-	cb.Delete().After("gorm:after_delete").Register("dd-trace-go:after_delete", afterFunc(plugins.DeleteCallback))
-	cb.Query().Before("gorm:query").Register("dd-trace-go:before_query", before)
-	cb.Query().After("gorm:after_query").Register("dd-trace-go:after_query", afterFunc(plugins.QueryCallback))
-	cb.RowQuery().Before("gorm:row_query").Register("dd-trace-go:before_row_query", before)
-	cb.RowQuery().After("gorm:row_query").Register("dd-trace-go:after_row_query", afterFunc(plugins.RowQueryCallback))
-
 	cfg := new(config)
 	defaults(cfg)
 	for _, fn := range ddtrace.Options {
 		fn(cfg)
 	}
-	var newDB = *db
-	newDB.Set(gormConfigKey,cfg)
-	db = &newDB
+
+	cb := db.Callback()
+	cb.Create().Before("gorm:before_create").Register("dd-trace-go:before_create", before)
+	cb.Create().After("gorm:after_create").Register("dd-trace-go:after_create",
+		afterFunc(plugins.CreateCallback,cfg.analyticsRate,cfg.serviceName))
+	cb.Update().Before("gorm:before_update").Register("dd-trace-go:before_update", before)
+	cb.Update().After("gorm:after_update").Register("dd-trace-go:after_update", afterFunc(plugins.UpdateCallback,cfg.analyticsRate,cfg.serviceName))
+	cb.Delete().Before("gorm:before_delete").Register("dd-trace-go:before_delete", before)
+	cb.Delete().After("gorm:after_delete").Register("dd-trace-go:after_delete", afterFunc(plugins.DeleteCallback,cfg.analyticsRate,cfg.serviceName))
+	cb.Query().Before("gorm:query").Register("dd-trace-go:before_query", before)
+	cb.Query().After("gorm:after_query").Register("dd-trace-go:after_query", afterFunc(plugins.QueryCallback,cfg.analyticsRate,cfg.serviceName))
+	cb.RowQuery().Before("gorm:row_query").Register("dd-trace-go:before_row_query", before)
+	cb.RowQuery().After("gorm:row_query").Register("dd-trace-go:after_row_query", afterFunc(plugins.RowQueryCallback,cfg.analyticsRate,cfg.serviceName))
+
 }
 
 // WithContext attaches the specified context to the given db. The context will
@@ -92,18 +89,13 @@ func before(scope *gorm.Scope) {
 	scope.Set(gormSpanStartTimeKey, time.Now())
 }
 
-func after(scope *gorm.Scope, operationName string) {
+func after(scope *gorm.Scope, operationName string, analyticsRate float64, serviceName string) {
 	v, ok := scope.Get(gormContextKey)
 	if !ok {
 		return
 	}
 	ctx := v.(context.Context)
 
-	v, ok = scope.Get(gormConfigKey)
-	if !ok {
-		return
-	}
-	cfg := v.(*config)
 
 	v, ok = scope.Get(gormSpanStartTimeKey)
 	if !ok {
@@ -113,12 +105,12 @@ func after(scope *gorm.Scope, operationName string) {
 
 	opts := []ddtrace.StartSpanOption{
 		tracer.StartTime(t),
-		tracer.ServiceName(cfg.serviceName),
+		tracer.ServiceName(serviceName),
 		tracer.SpanType(ext.SpanTypeSQL),
 		tracer.ResourceName(scope.SQL),
 	}
-	if !math.IsNaN(cfg.analyticsRate) {
-		opts = append(opts, tracer.Tag(ext.EventSampleRate, cfg.analyticsRate))
+	if !math.IsNaN(analyticsRate) {
+		opts = append(opts, tracer.Tag(ext.EventSampleRate, analyticsRate))
 	}
 
 	span, _ := tracer.StartSpanFromContext(ctx, operationName, opts...)
