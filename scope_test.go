@@ -1,11 +1,12 @@
 package gorm_test
 
 import (
-	"github.com/eatigo/gorm"
 	"encoding/hex"
 	"math/rand"
 	"strings"
 	"testing"
+
+	"github.com/eatigo/gorm"
 )
 
 func NameIn1And2(d *gorm.DB) *gorm.DB {
@@ -75,5 +76,18 @@ func TestFailedValuer(t *testing.T) {
 		t.Errorf("There should be an error should happen when insert data")
 	} else if !strings.HasPrefix(err.Error(), "Should not start with") {
 		t.Errorf("The error should be returned from Valuer, but get %v", err)
+	}
+}
+
+func TestDropTableWithTableOptions(t *testing.T) {
+	type UserWithOptions struct {
+		gorm.Model
+	}
+	DB.AutoMigrate(&UserWithOptions{})
+
+	DB = DB.Set("gorm:table_options", "CHARSET=utf8")
+	err := DB.DropTable(&UserWithOptions{}).Error
+	if err != nil {
+		t.Errorf("Table must be dropped, got error %s", err)
 	}
 }

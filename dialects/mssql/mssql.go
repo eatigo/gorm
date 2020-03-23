@@ -1,12 +1,16 @@
 package mssql
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
+	// Importing mssql driver package only in dialect file, otherwide not needed
 	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/eatigo/gorm"
 )
@@ -14,7 +18,7 @@ import (
 func setIdentityInsert(scope *gorm.Scope) {
 	if scope.Dialect().GetName() == "mssql" {
 		for _, field := range scope.PrimaryFields() {
-			if _, ok := field.TagSettings["AUTO_INCREMENT"]; ok && !field.IsBlank {
+			if _, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok && !field.IsBlank {
 				scope.NewDB().Exec(fmt.Sprintf("SET IDENTITY_INSERT %v ON", scope.TableName()))
 				scope.InstanceSet("mssql:identity_insert_on", true)
 			}
@@ -66,14 +70,14 @@ func (s *mssql) DataTypeOf(field *gorm.StructField) string {
 			sqlType = "bit"
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uintptr:
 			if s.fieldCanAutoIncrement(field) {
-				field.TagSettings["AUTO_INCREMENT"] = "AUTO_INCREMENT"
+				field.TagSettingsSet("AUTO_INCREMENT", "AUTO_INCREMENT")
 				sqlType = "int IDENTITY(1,1)"
 			} else {
 				sqlType = "int"
 			}
 		case reflect.Int64, reflect.Uint64:
 			if s.fieldCanAutoIncrement(field) {
-				field.TagSettings["AUTO_INCREMENT"] = "AUTO_INCREMENT"
+				field.TagSettingsSet("AUTO_INCREMENT", "AUTO_INCREMENT")
 				sqlType = "bigint IDENTITY(1,1)"
 			} else {
 				sqlType = "bigint"
@@ -112,7 +116,7 @@ func (s *mssql) DataTypeOf(field *gorm.StructField) string {
 }
 
 func (s mssql) fieldCanAutoIncrement(field *gorm.StructField) bool {
-	if value, ok := field.TagSettings["AUTO_INCREMENT"]; ok {
+	if value, ok := field.TagSettingsGet("AUTO_INCREMENT"); ok {
 		return value != "FALSE"
 	}
 	return field.IsPrimaryKey
@@ -164,14 +168,22 @@ func (s mssql) CurrentDatabase() (name string) {
 	return
 }
 
-func (mssql) LimitAndOffsetSQL(limit, offset interface{}) (sql string) {
+func parseInt(value interface{}) (int64, error) {
+	return strconv.ParseInt(fmt.Sprint(value), 0, 0)
+}
+
+func (mssql) LimitAndOffsetSQL(limit, offset interface{}) (sql string, err error) {
 	if offset != nil {
-		if parsedOffset, err := strconv.ParseInt(fmt.Sprint(offset), 0, 0); err == nil && parsedOffset >= 0 {
+		if parsedOffset, err := parseInt(offset); err != nil {
+			return "", err
+		} else if parsedOffset >= 0 {
 			sql += fmt.Sprintf(" OFFSET %d ROWS", parsedOffset)
 		}
 	}
 	if limit != nil {
-		if parsedLimit, err := strconv.ParseInt(fmt.Sprint(limit), 0, 0); err == nil && parsedLimit >= 0 {
+		if parsedLimit, err := parseInt(limit); err != nil {
+			return "", err
+		} else if parsedLimit >= 0 {
 			if sql == "" {
 				// add default zero offset
 				sql += " OFFSET 0 ROWS"
@@ -186,12 +198,26 @@ func (mssql) SelectFromDummyTable() string {
 	return ""
 }
 
+func (mssql) LastInsertIDOutputInterstitial(tableName, columnName string, columns []string) string {
+	if len(columns) == 0 {
+		// No OUTPUT to query
+		return ""
+	}
+	return fmt.Sprintf("OUTPUT Inserted.%v", columnName)
+}
+
 func (mssql) LastInsertIDReturningSuffix(tableName, columnName string) string {
-	return ""
+	// https://stackoverflow.com/questions/5228780/how-to-get-last-inserted-id
+	return "; SELECT SCOPE_IDENTITY()"
 }
 
 func (mssql) DefaultValueStr() string {
 	return "DEFAULT VALUES"
+}
+
+// NormalizeIndexAndColumn returns argument's index name and column name without doing anything
+func (mssql) NormalizeIndexAndColumn(indexName, columnName string) (string, string) {
+	return indexName, columnName
 }
 
 func currentDatabaseAndTable(dialect gorm.Dialect, tableName string) (string, string) {
@@ -200,4 +226,28 @@ func currentDatabaseAndTable(dialect gorm.Dialect, tableName string) (string, st
 		return splitStrings[0], splitStrings[1]
 	}
 	return dialect.CurrentDatabase(), tableName
+}
+
+// JSON type to support easy handling of JSON data in character table fields
+// using golang json.RawMessage for deferred decoding/encoding
+type JSON struct {
+	json.RawMessage
+}
+
+// Value get value of JSON
+func (j JSON) Value() (driver.Value, error) {
+	if len(j.RawMessage) == 0 {
+		return nil, nil
+	}
+	return j.MarshalJSON()
+}
+
+// Scan scan value into JSON
+func (j *JSON) Scan(value interface{}) error {
+	str, ok := value.(string)
+	if !ok {
+		return errors.New(fmt.Sprint("Failed to unmarshal JSONB value (strcast):", value))
+	}
+	bytes := []byte(str)
+	return json.Unmarshal(bytes, j)
 }

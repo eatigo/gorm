@@ -1,15 +1,15 @@
 package tests
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+"fmt"
+"os"
+"path/filepath"
 
-	"github.com/eatigo/gorm"
-	_ "github.com/eatigo/gorm/dialects/mssql"
-	_ "github.com/eatigo/gorm/dialects/mysql"
-	_ "github.com/eatigo/gorm/dialects/postgres"
-	_ "github.com/eatigo/gorm/dialects/sqlite"
+"github.com/eatigo/gorm"
+_ "github.com/eatigo/gorm/dialects/mssql"
+_ "github.com/eatigo/gorm/dialects/mysql"
+_ "github.com/eatigo/gorm/dialects/postgres"
+_ "github.com/eatigo/gorm/dialects/sqlite"
 )
 
 // OpenTestConnection open test connection used for GORM testing

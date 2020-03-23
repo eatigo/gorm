@@ -123,6 +123,31 @@ func TestAutoPreload(t *testing.T) {
 	}
 }
 
+func TestAutoPreloadFalseDoesntPreload(t *testing.T) {
+	user1 := getPreloadUser("auto_user1")
+	DB.Save(user1)
+
+	preloadDB := DB.Set("gorm:auto_preload", false).Where("role = ?", "Preload")
+	var user User
+	preloadDB.Find(&user)
+
+	if user.BillingAddress.Address1 != "" {
+		t.Error("AutoPreload was set to fasle, but still fetched data")
+	}
+
+	user2 := getPreloadUser("auto_user2")
+	DB.Save(user2)
+
+	var users []User
+	preloadDB.Find(&users)
+
+	for _, user := range users {
+		if user.BillingAddress.Address1 != "" {
+			t.Error("AutoPreload was set to fasle, but still fetched data")
+		}
+	}
+}
+
 func TestNestedPreload1(t *testing.T) {
 	type (
 		Level1 struct {
@@ -746,6 +771,7 @@ func TestNestedPreload11(t *testing.T) {
 	levelB3 := &LevelB3{
 		Value:     "bar",
 		LevelB1ID: sql.NullInt64{Valid: true, Int64: int64(levelB1.ID)},
+		LevelB2s:  []*LevelB2{},
 	}
 	if err := DB.Create(levelB3).Error; err != nil {
 		t.Error(err)
@@ -1651,7 +1677,7 @@ func TestPreloadManyToManyCallbacks(t *testing.T) {
 	lvl := Level1{
 		Name: "l1",
 		Level2s: []Level2{
-			Level2{Name: "l2-1"}, Level2{Name: "l2-2"},
+			{Name: "l2-1"}, {Name: "l2-2"},
 		},
 	}
 	DB.Save(&lvl)
